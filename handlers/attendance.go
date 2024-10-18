@@ -59,3 +59,4 @@ func GetAttendanceByUser(c *gin.Context, db *sqlx.DB) {
 
 	c.JSON(http.StatusOK, attendances)
 }
+

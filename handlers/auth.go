@@ -66,12 +66,5 @@ func Login(c *gin.Context, db *sqlx.DB) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful!",
 		"token":   tokenString,
-		"user": gin.H{
-			"id":        user.ID,
-			"username":  user.Username,
-			"email":     user.Email,
-			"role_id":   user.RoleID,
-			"is_active": user.IsActive,
-		},
 	})
 }

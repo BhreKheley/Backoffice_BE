@@ -2,23 +2,37 @@ package routes
 
 import (
 	"absensi-app/handlers"
+	"absensi-app/middleware"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 )
 
 // SetupRoutes initializes all application routes
 func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
+	r.Use(cors.New(cors.Config{
+		AllowAllOrigins:  true,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+
 	// Auth Routes
-	auth := r.Group("/auth")
+	auth := r.Group("")
 	{
-		auth.POST("/login", func(c *gin.Context) {
+		auth.POST("/auth", func(c *gin.Context) {
 			handlers.Login(c, db)
 		})
 	}
 
+	// Routes with auth middleware
+	protected := r.Group("/")
+	protected.Use(middleware.AuthMiddleware())
+
 	// Attendance Routes
-	attendance := r.Group("/attendance")
+	attendance := protected.Group("/attendance")
 	{
 		attendance.POST("/checkin", func(c *gin.Context) {
 			handlers.CheckIn(c, db)
@@ -29,7 +43,7 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 	}
 
 	// Employee Routes
-	employee := r.Group("/employee")
+	employee := protected.Group("/employee")
 	{
 		employee.GET("/:id", func(c *gin.Context) {
 			handlers.GetEmployee(c, db)
@@ -40,11 +54,8 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 	}
 
 	// User Routes
-	user := r.Group("/user")
+	user := protected.Group("/user")
 	{
-		user.POST("/create", func(c *gin.Context) {
-			handlers.CreateUser(c, db)
-		})
 		user.GET("/:id", func(c *gin.Context) {
 			handlers.GetUserByID(c, db)
 		})

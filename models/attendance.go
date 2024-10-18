@@ -1,9 +1,14 @@
 package models
 
-import "time"
+import (
+	"time"
+	"gorm.io/gorm"
+)
+
 
 // Attendance represents the attendance record of an employee
 type Attendance struct {
+	gorm.Model
 	ID         int       `json:"id"`
 	UserID     int       `json:"user_id"`
 	StatusID   int       `json:"status_id"`

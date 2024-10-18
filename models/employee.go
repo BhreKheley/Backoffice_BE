@@ -1,8 +1,12 @@
 package models
 
-import "time"
+import (
+	"time"
+	"gorm.io/gorm"
+)
 
 type Employee struct {
+	gorm.Model
 	ID        int       `json:"id"`
 	UserID    int       `json:"user_id"`
 	Fullname  string    `json:"full_name"`

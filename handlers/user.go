@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"absensi-app/models"
 	"absensi-app/helpers"
+	"absensi-app/models"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -23,14 +23,14 @@ func GetUserByID(c *gin.Context, db *sqlx.DB) {
 }
 
 func GetAllUsers(c *gin.Context, db *sqlx.DB) {
-	var users []models.User
-	err := db.Select(&users, "SELECT id, username, email, role_id, is_active FROM \"user\"")
+	var user []models.User
+	err := db.Select(&user, "SELECT username, email, role_id, is_active FROM user")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, users)
+	c.JSON(http.StatusOK, user)
 }
 
 // CreateUser handles the creation of a new user with a hashed password

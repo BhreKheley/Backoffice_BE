@@ -1,0 +1,18 @@
+# .air.toml
+# Configuration file for Air
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  bin = "tmp/main"   # Output binary path
+  cmd = "go build -o tmp/main ./main.go"
+  include_ext = ["go"]  # Extensions to watch for
+  exclude_dir = ["tmp", "vendor"]
+
+[watch]
+  include_dir = ["."]
+  exclude_dir = ["tmp", "vendor"]
+
+[log]
+  level = "info"  # Log level: info, debug, error
