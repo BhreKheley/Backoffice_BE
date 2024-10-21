@@ -3,6 +3,7 @@ package routes
 import (
 	"absensi-app/handlers"
 	"absensi-app/middleware"
+	"net/http"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -62,5 +63,37 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		user.GET("/", func(c *gin.Context) {
 			handlers.GetAllUsers(c, db)
 		})
+		// Create User Route (now inside the protected group)
+		protected.POST("/create_user", func(c *gin.Context) {
+			handlers.CreateUser(c, db)
+		})
 	}
+
+	// Add auth route with middleware
+	authProtected := protected.Group("/auth")
+	{
+		authProtected.GET("/get-user-by-token", func(c *gin.Context) {
+			handlers.GetUserByToken(c, db)
+		})
+	}
+
+	// Route untuk menampilkan daftar semua rute
+	r.GET("/list-routes", func(c *gin.Context) {
+		routes := r.Routes()
+		var routeList []map[string]string
+
+		// Loop melalui daftar rute yang ada dan tambahkan ke array
+		for _, route := range routes {
+			routeInfo := map[string]string{
+				"method": route.Method,
+				"path":   route.Path,
+			}
+			routeList = append(routeList, routeInfo)
+		}
+
+		// Kembalikan daftar rute dalam bentuk JSON
+		c.JSON(http.StatusOK, gin.H{
+			"routes": routeList,
+		})
+	})
 }

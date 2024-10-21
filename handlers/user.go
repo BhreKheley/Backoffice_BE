@@ -3,6 +3,7 @@ package handlers
 import (
 	"absensi-app/helpers"
 	"absensi-app/models"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -24,8 +25,10 @@ func GetUserByID(c *gin.Context, db *sqlx.DB) {
 
 func GetAllUsers(c *gin.Context, db *sqlx.DB) {
 	var user []models.User
-	err := db.Select(&user, "SELECT username, email, role_id, is_active FROM user")
+	err := db.Select(&user, `SELECT id, username, email, role_id, is_active FROM "user"`)
+
 	if err != nil {
+		fmt.Println("Error: ", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
