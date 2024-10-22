@@ -64,7 +64,7 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 			handlers.GetAllUsers(c, db)
 		})
 		// Create User Route (now inside the protected group)
-		protected.POST("/create_user", func(c *gin.Context) {
+		user.POST("/create_user", func(c *gin.Context) {
 			handlers.CreateUser(c, db)
 		})
 	}

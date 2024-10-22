@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: absensi-api-container
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: "postgres://postgres:mysecretpassword@postgres:5432/absensi_app?sslmode=disable"
+    networks:
+      - db_backoffice_app-network # Gunakan network yang benar
+
+networks:
+  db_backoffice_app-network:
+    external: true # Pastikan ini menggunakan network yang sudah ada

@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres
+    container_name: postgres-container
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: absensi_app
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - app-network # Hubungkan PostgreSQL ke network yang sama
+
+networks:
+  app-network:
+    name: app-network # Definisikan network sebagai external
+
+volumes:
+  db-data:

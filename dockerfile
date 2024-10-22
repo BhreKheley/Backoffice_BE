@@ -1,6 +1,9 @@
 # Step 1: Build the Go API
 FROM golang:1.23-alpine AS builder
 
+# Install Reflex
+RUN go install github.com/cespare/reflex@latest
+
 WORKDIR /app
 
 COPY go.mod ./
