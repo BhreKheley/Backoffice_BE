@@ -49,8 +49,17 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		employee.GET("/:id", func(c *gin.Context) {
 			handlers.GetEmployee(c, db)
 		})
-		employee.POST("/", func(c *gin.Context) {
+		employee.GET("/", func(c *gin.Context) {
+			handlers.GetAllEmployees(c, db)
+		})
+		employee.POST("/create_employee", func(c *gin.Context) {
 			handlers.CreateEmployee(c, db)
+		})
+		employee.PUT("/:id", func(c *gin.Context) {
+			handlers.UpdateEmployee(c, db)
+		})
+		employee.DELETE("/:id", func(c *gin.Context) {
+			handlers.DeleteEmployee(c, db)
 		})
 	}
 
@@ -63,9 +72,14 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 		user.GET("/", func(c *gin.Context) {
 			handlers.GetAllUsers(c, db)
 		})
-		// Create User Route (now inside the protected group)
 		user.POST("/create_user", func(c *gin.Context) {
 			handlers.CreateUser(c, db)
+		})
+		user.PUT("/:id", func(c *gin.Context) {
+			handlers.UpdateUser(c, db)
+		})
+		user.DELETE("/:id", func(c *gin.Context) {
+			handlers.DeleteUser(c, db)
 		})
 	}
 
