@@ -11,8 +11,8 @@ services:
     environment:
       DATABASE_URL: "postgres://postgres:mysecretpassword@postgres:5432/absensi_app?sslmode=disable"
     networks:
-      - db_backoffice_app-network # Gunakan network yang benar
+      - app-network # Gunakan network yang sama seperti Postgres
 
 networks:
-  db_backoffice_app-network:
-    external: true # Pastikan ini menggunakan network yang sudah ada
+  app-network:
+    external: true # Pastikan menggunakan network yang sama dengan Postgres

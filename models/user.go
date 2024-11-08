@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"gorm.io/gorm"
 )
 
@@ -12,4 +14,7 @@ type User struct {
 	Password string `json:"password" db:"password"`
 	RoleID   int    `json:"role_id" db:"role_id"`
 	IsActive bool   `json:"is_active" db:"is_active"`
+	CreatedAt time.Time `db:"created_at"`
+    UpdatedAt time.Time `db:"updated_at"`
 }
+

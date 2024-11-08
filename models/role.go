@@ -1,13 +1,13 @@
 package models
 
-import (
-	"gorm.io/gorm"
-)
-
 // Role represents the role of a user in the system
 type Role struct {
-	gorm.Model
-	ID   int    `json:"id"`
-	Rolename string `json:"role_name"`
-	Code string `json:"code"`
+	ID       int    `db:"id" json:"id"`
+	RoleName string `db:"role_name" json:"role_name"` // Pastikan tag db di sini
+	Code     string `db:"code" json:"code"`
+}
+
+// Custom Table Name for Role
+func (Role) TableName() string {
+	return "role"
 }

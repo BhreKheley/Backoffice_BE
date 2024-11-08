@@ -13,11 +13,11 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
     networks:
-      - app-network # Hubungkan PostgreSQL ke network yang sama
+      - app-network
 
 networks:
   app-network:
-    name: app-network # Definisikan network sebagai external
+    name: app-network # Definisikan network sebagai external atau internal sesuai kebutuhan
 
 volumes:
   db-data:
