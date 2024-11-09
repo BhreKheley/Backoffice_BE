@@ -5,10 +5,9 @@ import (
 	"net/http"
 	"strconv"
 	"time"
-	
 
 	"github.com/gin-gonic/gin"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 )
 
 // AttendanceResponse represents the response format for the attendance API
@@ -42,8 +41,8 @@ type AttendanceFormatted struct {
 	UpdatedAt         time.Time `json:"updated_at"`
 }
 
-// CheckIn handler to record clock-in
-func CheckIn(c *gin.Context, db *sqlx.DB) {
+// CheckIn handler untuk mencatat clock-in
+func CheckIn(c *gin.Context, db *gorm.DB) {
 	var attendance models.Attendance
 	if err := c.ShouldBindJSON(&attendance); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Input tidak valid", "error": err.Error()})
@@ -52,9 +51,7 @@ func CheckIn(c *gin.Context, db *sqlx.DB) {
 
 	attendance.ClockIn = time.Now()
 
-	_, err := db.NamedExec(`INSERT INTO attendance (user_id, status_id, clock_in, clock_in_photo, latitude_clock_in, longitude_clock_in, description) 
-        VALUES (:user_id, :status_id, :clock_in, :clock_in_photo, :latitude_clock_in, :longitude_clock_in, :description)`, &attendance)
-	if err != nil {
+	if err := db.Create(&attendance).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal mencatat check-in", "error": err.Error()})
 		return
 	}
@@ -62,8 +59,8 @@ func CheckIn(c *gin.Context, db *sqlx.DB) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Check-in berhasil"})
 }
 
-// CheckOut handler to record clock-out
-func CheckOut(c *gin.Context, db *sqlx.DB) {
+// CheckOut handler untuk mencatat clock-out
+func CheckOut(c *gin.Context, db *gorm.DB) {
 	var attendance models.Attendance
 	if err := c.ShouldBindJSON(&attendance); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Input tidak valid", "error": err.Error()})
@@ -72,23 +69,27 @@ func CheckOut(c *gin.Context, db *sqlx.DB) {
 
 	attendance.ClockOut = time.Now()
 
-	// Query untuk memastikan bahwa attendance record ada dan pengguna telah melakukan check-in
-	_, err := db.NamedExec(`UPDATE attendance SET clock_out = :clock_out, clock_out_photo = :clock_out_photo, 
-        latitude_clock_out = :latitude_clock_out, longitude_clock_out = :longitude_clock_out 
-        WHERE id = :id AND user_id = :user_id AND clock_out IS NULL`, &attendance)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal mencatat check-out", "error": err.Error()})
+	// Update attendance untuk user yang belum melakukan check-out
+	result := db.Model(&models.Attendance{}).
+		Where("id = ? AND user_id = ? AND clock_out IS NULL", attendance.ID, attendance.UserID).
+		Updates(map[string]interface{}{
+			"clock_out":          attendance.ClockOut,
+			"clock_out_photo":    attendance.ClockOutPhoto,
+			"latitude_clock_out": attendance.LatitudeClockOut,
+			"longitude_clock_out": attendance.LongitudeClockOut,
+		})
+
+	if result.Error != nil || result.RowsAffected == 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal mencatat check-out", "error": result.Error})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Check-out berhasil"})
 }
 
-// GetAttendanceByID retrieves attendance record by ID
-func GetAttendanceByID(c *gin.Context, db *sqlx.DB) {
+// GetAttendanceByID handler untuk mengambil catatan absensi berdasarkan ID
+func GetAttendanceByID(c *gin.Context, db *gorm.DB) {
 	id := c.Param("id")
-
-	// Validasi ID
 	attendanceID, err := strconv.Atoi(id)
 	if err != nil || attendanceID <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ID absensi tidak valid"})
@@ -96,46 +97,33 @@ func GetAttendanceByID(c *gin.Context, db *sqlx.DB) {
 	}
 
 	var attendance models.Attendance
-	err = db.Get(&attendance, "SELECT * FROM attendance WHERE id = $1", attendanceID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Gagal mengambil catatan absensi", "error": err.Error()})
+	if err := db.First(&attendance, attendanceID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Catatan absensi tidak ditemukan", "error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": attendance})
 }
 
-// GetAllAttendance retrieves all attendance records with pagination and optional date filtering
-// GetAllAttendance retrieves all attendance records with pagination and optional date filtering
-func GetAllAttendance(c *gin.Context, db *sqlx.DB) {
-	page := c.Query("page")
-	limit := c.Query("limit")
+// GetAllAttendance handler untuk mengambil semua catatan absensi dengan pagination dan filter tanggal
+func GetAllAttendance(c *gin.Context, db *gorm.DB) {
+	pageStr := c.DefaultQuery("page", "1")
+	limitStr := c.DefaultQuery("limit", "10")
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 
-	if page == "" {
-		page = "1"
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
 	}
-	if limit == "" {
-		limit = "10"
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 {
+		limit = 10
 	}
-
-	pageNum, err := strconv.Atoi(page)
-	if err != nil || pageNum < 1 {
-		pageNum = 1
-	}
-	limitNum, err := strconv.Atoi(limit)
-	if err != nil || limitNum < 1 {
-		limitNum = 10
-	}
-
-	offset := (pageNum - 1) * limitNum
 
 	var attendances []models.Attendance
-	var query string
-	var args []interface{}
+	query := db.Order("clock_in DESC")
 
-	query = "SELECT * FROM attendance"
 	if startDate != "" && endDate != "" {
 		start, err := time.Parse("2006-01-02", startDate)
 		if err != nil {
@@ -147,23 +135,15 @@ func GetAllAttendance(c *gin.Context, db *sqlx.DB) {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Format tanggal akhir tidak valid"})
 			return
 		}
-
-		query += " WHERE clock_in BETWEEN $1 AND $2"
-		args = append(args, start, end)
+		query = query.Where("clock_in BETWEEN ? AND ?", start, end)
 	}
-	query += " ORDER BY clock_in DESC LIMIT $3 OFFSET $4"
-	args = append(args, limitNum, offset)
 
-	err = db.Select(&attendances, query, args...)
-	if err != nil {
+	totalRecords := int64(0)
+	query.Model(&models.Attendance{}).Count(&totalRecords)
+
+	query = query.Limit(limit).Offset((page - 1) * limit)
+	if err := query.Find(&attendances).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal mengambil catatan absensi"})
-		return
-	}
-
-	var totalRecords int
-	err = db.Get(&totalRecords, "SELECT COUNT(*) FROM attendance")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal menghitung total catatan"})
 		return
 	}
 
@@ -189,9 +169,9 @@ func GetAllAttendance(c *gin.Context, db *sqlx.DB) {
 
 	response := AttendanceResponse{
 		Metadata: Metadata{
-			TotalRecords: totalRecords,
-			Page:         pageNum,
-			Limit:        limitNum,
+			TotalRecords: int(totalRecords),
+			Page:         page,
+			Limit:        limit,
 		},
 		Attendances: formattedAttendances,
 	}

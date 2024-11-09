@@ -1,16 +1,23 @@
 package models
 
-import "time"
+import (
+	"time"
+)
 
 // Employee represents the employee model
 type Employee struct {
-	ID         int       `db:"id" json:"id"`
-	UserID     int       `db:"user_id" json:"user_id"`
-	Fullname   string    `db:"full_name" json:"full_name"`
-	Phone      string    `db:"phone" json:"phone"`
-	PositionID int       `db:"position_id" json:"position_id"`
-	DivisionID int       `db:"division_id" json:"division_id"`
-	IsActive   bool      `db:"is_active" json:"is_active"`
-	CreatedAt  time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt  time.Time `db:"updated_at" json:"updated_at"`
+	ID         int       `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID     int       `gorm:"not null" json:"user_id"`
+	Fullname   string    `gorm:"column:full_name" json:"full_name"`
+	Phone      string    `gorm:"type:varchar(20)" json:"phone"`
+	PositionID int       `gorm:"not null" json:"position_id"`
+	DivisionID int       `gorm:"not null" json:"division_id"`
+	IsActive   bool      `gorm:"default:true" json:"is_active"`
+	CreatedAt  time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+// Custom Table Name for RolePermission
+func (Employee) TableName() string {
+	return "employee"
 }

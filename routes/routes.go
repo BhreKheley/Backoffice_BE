@@ -7,11 +7,11 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 )
 
-// SetupRoutes initializes all application routes
-func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
+// SetupRoutes initializes all application routes using GORM
+func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	// Setup CORS
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
@@ -25,9 +25,9 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 	r.POST("/check-email", func(c *gin.Context) { handlers.CheckEmail(c, db) })
 
 	// Auth Routes
-	auth := r.Group("")
+	auth := r.Group("auth")
 	{
-		auth.POST("/auth", func(c *gin.Context) {
+		auth.POST("/login", func(c *gin.Context) {
 			handlers.Login(c, db)
 		})
 	}
@@ -102,7 +102,7 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB) {
 	// Role Routes
 	role := protected.Group("/role")
 	{
-		role.Use(middleware.CheckPermission("VIEW_USERS", db)) // Use VIEW_USERS for role viewing
+		role.Use(middleware.CheckPermission("VIEW_USERS", db))
 		role.GET("/", func(c *gin.Context) {
 			handlers.GetRoles(c, db)
 		})

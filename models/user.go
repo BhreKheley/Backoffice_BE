@@ -2,19 +2,20 @@ package models
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type User struct {
-	gorm.Model
-	ID       int    `json:"id"`
-	Username string `json:"username" db:"username"`
-	Email    string `json:"email" db:"email"`
-	Password string `json:"password" db:"password"`
-	RoleID   int    `json:"role_id" db:"role_id"`
-	IsActive bool   `json:"is_active" db:"is_active"`
-	CreatedAt time.Time `db:"created_at"`
-    UpdatedAt time.Time `db:"updated_at"`
+	ID        int      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Username  string    `gorm:"type:varchar(255);unique;not null" json:"username"`
+	Email     string    `gorm:"type:varchar(255);unique;not null" json:"email"`
+	Password  string    `gorm:"type:varchar(255);not null" json:"password"`
+	RoleID    int      `gorm:"not null" json:"role_id"`
+	IsActive  bool      `gorm:"default:true" json:"is_active"`
+	CreatedAt time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
+// TableName method untuk men-override nama tabel
+func (User) TableName() string {
+	return "user"
+}

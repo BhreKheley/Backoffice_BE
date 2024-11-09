@@ -2,59 +2,71 @@ package handlers
 
 import (
 	"absensi-app/models"
-	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 )
 
 // GetEmployee retrieves an employee by ID
-func GetEmployee(c *gin.Context, db *sqlx.DB) {
+func GetEmployee(c *gin.Context, db *gorm.DB) {
 	var employee models.Employee
 	id := c.Param("id")
 
-	err := db.QueryRow("SELECT id, user_id, full_name, phone, position_id, division_id, created_at, updated_at FROM employee WHERE id = $1", id).
-		Scan(&employee.ID, &employee.UserID, &employee.Fullname, &employee.Phone, &employee.PositionID, &employee.DivisionID, &employee.CreatedAt, &employee.UpdatedAt)
-
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"status":  "error",
-			"message": "Employee not found",
-		})
+	if err := db.First(&employee, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "error",
+				"message": "Employee not found",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to retrieve employee",
+				"error":   err.Error(),
+			})
+		}
 		return
 	}
 
-	// Format response to match the user response
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
-		"data": gin.H{
-			"id":          employee.ID,
-			"user_id":     employee.UserID,
-			"full_name":   employee.Fullname,
-			"phone":       employee.Phone,
-			"position_id": employee.PositionID,
-			"division_id": employee.DivisionID,
-			"created_at":  employee.CreatedAt,
-			"updated_at":  employee.UpdatedAt,
-		},
+		"data":   employee,
 	})
 }
 
 // GetAllEmployees retrieves all employees
-func GetAllEmployees(c *gin.Context, db *sqlx.DB) {
-	var employees []models.Employee
-
-	err := db.Select(&employees, "SELECT id, user_id, full_name, phone, position_id, division_id, is_active, created_at, updated_at FROM employee")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to retrieve employees",
-			"error":   err.Error(), // Tambahkan detail error
-		})
-		return
+func GetAllEmployees(c *gin.Context, db *gorm.DB) {
+	var employees []struct {
+		models.Employee
+		PositionName string `json:"position_name" gorm:"column:position_name"`
+		DivisionName string `json:"division_name" gorm:"column:division_name"`
 	}
+
+	err := db.Table(`"employee" AS e`).
+		Select("e.id, e.user_id, e.full_name, e.phone, e.position_id, e.division_id, e.is_active, e.created_at, e.updated_at, p.position_name, d.division_name").
+		Joins("LEFT JOIN position AS p ON e.position_id = p.id").
+		Joins("LEFT JOIN division AS d ON e.division_id = d.id").
+		Scan(&employees).Error
+
+	if err != nil {
+		fmt.Println("Error: ", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to retrieve employees"})
+		return
+	} else {
+		fmt.Printf("Employees: %+v\n", employees)
+	}
+
+	// if err := db.Find(&employees).Error; err != nil {
+	// 	c.JSON(http.StatusInternalServerError, gin.H{
+	// 		"status":  "error",
+	// 		"message": "Failed to retrieve employees",
+	// 		"error":   err.Error(),
+	// 	})
+	// 	return
+	// }
 
 	if len(employees) == 0 {
 		c.JSON(http.StatusOK, gin.H{
@@ -65,15 +77,14 @@ func GetAllEmployees(c *gin.Context, db *sqlx.DB) {
 		return
 	}
 
-	// Format response to match the user response
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
-		"data":   formatEmployees(employees),
+		"data":   employees,
 	})
 }
 
 // CreateEmployee creates a new employee
-func CreateEmployee(c *gin.Context, db *sqlx.DB) {
+func CreateEmployee(c *gin.Context, db *gorm.DB) {
 	var employee models.Employee
 	if err := c.ShouldBindJSON(&employee); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -84,19 +95,9 @@ func CreateEmployee(c *gin.Context, db *sqlx.DB) {
 		return
 	}
 
-	// Check if the user_id is already associated with an employee
-	var existingEmployeeCount int
-	err := db.Get(&existingEmployeeCount, "SELECT COUNT(*) FROM employee WHERE user_id = $1", employee.UserID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to check existing employee",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	if existingEmployeeCount > 0 {
+	var count int64
+	db.Model(&models.Employee{}).Where("user_id = ?", employee.UserID).Count(&count)
+	if count > 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"message": "User ini sudah terkait dengan employee lain",
@@ -104,14 +105,10 @@ func CreateEmployee(c *gin.Context, db *sqlx.DB) {
 		return
 	}
 
-	// Set timestamps
 	employee.CreatedAt = time.Now()
 	employee.UpdatedAt = time.Now()
 
-	// Insert new employee record
-	_, err = db.Exec("INSERT INTO employee (user_id, full_name, phone, position_id, division_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-		employee.UserID, employee.Fullname, employee.Phone, employee.PositionID, employee.DivisionID, employee.CreatedAt, employee.UpdatedAt)
-	if err != nil {
+	if err := db.Create(&employee).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Failed to create employee",
@@ -123,28 +120,28 @@ func CreateEmployee(c *gin.Context, db *sqlx.DB) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
 		"message": "Employee created successfully",
-		"data": gin.H{
-			"user_id":     employee.UserID,
-			"full_name":   employee.Fullname,
-			"phone":       employee.Phone,
-			"position_id": employee.PositionID,
-			"division_id": employee.DivisionID,
-		},
+		"data":    employee,
 	})
 }
 
 // UpdateEmployee updates an existing employee by ID
-func UpdateEmployee(c *gin.Context, db *sqlx.DB) {
+func UpdateEmployee(c *gin.Context, db *gorm.DB) {
 	id := c.Param("id")
 	var employee models.Employee
 
-	// Check if employee exists
-	err := db.Get(&employee, "SELECT * FROM employee WHERE id = $1", id)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"status":  "error",
-			"message": "Employee not found",
-		})
+	if err := db.First(&employee, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "error",
+				"message": "Employee not found",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to retrieve employee",
+				"error":   err.Error(),
+			})
+		}
 		return
 	}
 
@@ -159,10 +156,7 @@ func UpdateEmployee(c *gin.Context, db *sqlx.DB) {
 
 	employee.UpdatedAt = time.Now()
 
-	_, err = db.Exec("UPDATE employee SET full_name = $1, phone = $2, position_id = $3, division_id = $4, updated_at = $5 WHERE id = $6",
-		employee.Fullname, employee.Phone, employee.PositionID, employee.DivisionID, employee.UpdatedAt, id)
-
-	if err != nil {
+	if err := db.Save(&employee).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Failed to update employee",
@@ -178,14 +172,12 @@ func UpdateEmployee(c *gin.Context, db *sqlx.DB) {
 }
 
 // DeleteEmployee deletes an employee by ID
-func DeleteEmployee(c *gin.Context, db *sqlx.DB) {
+func DeleteEmployee(c *gin.Context, db *gorm.DB) {
 	id := c.Param("id")
-
-	// Check if employee exists
 	var employee models.Employee
-	err := db.Get(&employee, "SELECT * FROM employee WHERE id = $1", id)
-	if err != nil {
-		if err == sql.ErrNoRows {
+
+	if err := db.First(&employee, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{
 				"status":  "error",
 				"message": "Employee tidak ditemukan",
@@ -200,19 +192,8 @@ func DeleteEmployee(c *gin.Context, db *sqlx.DB) {
 		return
 	}
 
-	// Check if employee has related attendance data
-	var attendanceCount int
-	err = db.Get(&attendanceCount, "SELECT COUNT(*) FROM attendance WHERE user_id = $1", employee.UserID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Gagal memeriksa data absensi",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	// If employee has attendance data, prevent deletion
+	var attendanceCount int64
+	db.Model(&models.Attendance{}).Where("user_id = ?", employee.UserID).Count(&attendanceCount)
 	if attendanceCount > 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -221,10 +202,8 @@ func DeleteEmployee(c *gin.Context, db *sqlx.DB) {
 		return
 	}
 
-	// Check if the related user is inactive
 	var userIsActive bool
-	err = db.Get(&userIsActive, "SELECT is_active FROM \"user\" WHERE id = $1", employee.UserID)
-	if err != nil {
+	if err := db.Model(&models.User{}).Select("is_active").Where("id = ?", employee.UserID).Scan(&userIsActive).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Gagal memeriksa status user",
@@ -233,7 +212,6 @@ func DeleteEmployee(c *gin.Context, db *sqlx.DB) {
 		return
 	}
 
-	// Only delete employee if related user is inactive
 	if userIsActive {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -242,9 +220,7 @@ func DeleteEmployee(c *gin.Context, db *sqlx.DB) {
 		return
 	}
 
-	// Delete employee if no related attendance and user is inactive
-	_, err = db.Exec("DELETE FROM employee WHERE id = $1", id)
-	if err != nil {
+	if err := db.Delete(&employee).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Gagal menghapus employee",
@@ -257,23 +233,4 @@ func DeleteEmployee(c *gin.Context, db *sqlx.DB) {
 		"status":  "success",
 		"message": "Employee berhasil dihapus",
 	})
-}
-
-// Helper function to format employees
-func formatEmployees(employees []models.Employee) []gin.H {
-	var formatted []gin.H
-	for _, emp := range employees {
-		formatted = append(formatted, gin.H{
-			"id":          emp.ID,
-			"user_id":     emp.UserID,
-			"full_name":   emp.Fullname,
-			"phone":       emp.Phone,
-			"position_id": emp.PositionID,
-			"division_id": emp.DivisionID,
-			"is_active":   emp.IsActive,
-			"created_at":  emp.CreatedAt,
-			"updated_at":  emp.UpdatedAt,
-		})
-	}
-	return formatted
 }

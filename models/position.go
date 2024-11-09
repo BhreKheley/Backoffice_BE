@@ -5,9 +5,14 @@ import (
 )
 
 type Position struct {
-	ID           int       `db:"id" json:"id"`
-	PositionName string    `db:"position_name" json:"position_name"`
-	DivisionID   int       `db:"division_id" json:"division_id"`
-	CreatedAt    time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
+	ID           int      `gorm:"primaryKey;autoIncrement" json:"id"`
+	PositionName string    `gorm:"type:varchar(255);not null" json:"position_name"`
+	DivisionID   int      `gorm:"not null" json:"division_id"`
+	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+// Custom Table Name for RolePermission
+func (Position) TableName() string {
+	return "position"
 }

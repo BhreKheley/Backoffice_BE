@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"database/sql"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 )
 
 // UserResponse struct untuk response detail user
@@ -35,23 +34,26 @@ type UserListResponse struct {
 }
 
 // GetUserByID handles fetching user by ID
-func GetUserByID(c *gin.Context, db *sqlx.DB) {
+func GetUserByID(c *gin.Context, db *gorm.DB) {
 	id := c.Param("id")
-
 	var user struct {
 		models.User
-		RoleName string `db:"role_name"`
+		RoleName string `gorm:"column:role_name"`
 	}
 
-	err := db.QueryRow(`
-		SELECT j1.id, j1.username, j1.email, j1.role_id, j1.is_active, j2.role_name 
-		FROM "user" j1
-		LEFT JOIN role j2 ON j1.role_id = j2.id 
-		WHERE j1.id = $1`, id).
-		Scan(&user.ID, &user.Username, &user.Email, &user.RoleID, &user.IsActive, &user.RoleName)
+	err := db.Table(`"user" AS u`).
+		Select("u.id, u.username, u.email, u.role_id, u.is_active, r.role_name").
+		Joins("LEFT JOIN role AS r ON u.role_id = r.id").
+		Where("u.id = ?", id).
+		Scan(&user).Error
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "User not found"})
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "User not found"})
+		} else {
+			fmt.Println("Detailed Error: ", err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to retrieve user"})
+		}
 		return
 	}
 
@@ -69,16 +71,16 @@ func GetUserByID(c *gin.Context, db *sqlx.DB) {
 }
 
 // GetAllUsers handles fetching all users
-func GetAllUsers(c *gin.Context, db *sqlx.DB) {
-	var users []struct {
+func GetAllUsers(c *gin.Context, db *gorm.DB) {
+	var user []struct {
 		models.User
-		RoleName string `db:"role_name"`
+		RoleName string `gorm:"column:role_name"`
 	}
 
-	err := db.Select(&users, `
-		SELECT j1.id, j1.username, j1.email, j1.role_id, j1.is_active, j2.role_name 
-		FROM "user" j1
-		LEFT JOIN role j2 ON j1.role_id = j2.id`)
+	err := db.Table(`"user" AS u`).
+		Select("u.id, u.username, u.email, u.role_id, u.is_active, r.role_name").
+		Joins("LEFT JOIN role AS r ON u.role_id = r.id").
+		Scan(&user).Error
 
 	if err != nil {
 		fmt.Println("Error: ", err.Error())
@@ -86,16 +88,16 @@ func GetAllUsers(c *gin.Context, db *sqlx.DB) {
 		return
 	}
 
-	if len(users) == 0 {
+	if len(user) == 0 {
 		c.JSON(http.StatusOK, UserListResponse{Status: "success", Data: []UserDetail{}})
 		return
 	}
 
-	c.JSON(http.StatusOK, UserListResponse{Status: "success", Data: formatUsers(users)})
+	c.JSON(http.StatusOK, UserListResponse{Status: "success", Data: formatUsers(user)})
 }
 
 // CreateUser handles creating a new user with validation
-func CreateUser(c *gin.Context, db *sqlx.DB) {
+func CreateUser(c *gin.Context, db *gorm.DB) {
 	var newUser models.User
 	if err := c.ShouldBindJSON(&newUser); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid input data", "error": err.Error()})
@@ -128,11 +130,10 @@ func CreateUser(c *gin.Context, db *sqlx.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to hash password"})
 		return
 	}
+	newUser.Password = hashedPassword
 
 	// Simpan pengguna baru ke database
-	_, err = db.Exec(`INSERT INTO "user" (username, email, password, role_id, is_active) VALUES ($1, $2, $3, $4, $5)`,
-		newUser.Username, newUser.Email, hashedPassword, newUser.RoleID, newUser.IsActive)
-	if err != nil {
+	if err := db.Create(&newUser).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to create user", "error": err.Error()})
 		return
 	}
@@ -140,9 +141,8 @@ func CreateUser(c *gin.Context, db *sqlx.DB) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "User created successfully!"})
 }
 
-
 // UpdateUser handles updating an existing user by ID
-func UpdateUser(c *gin.Context, db *sqlx.DB) {
+func UpdateUser(c *gin.Context, db *gorm.DB) {
 	id := c.Param("id")
 	var updatedUser models.User
 	if err := c.ShouldBindJSON(&updatedUser); err != nil {
@@ -150,9 +150,7 @@ func UpdateUser(c *gin.Context, db *sqlx.DB) {
 		return
 	}
 
-	_, err := db.Exec(`UPDATE "user" SET username = $1, email = $2, role_id = $3, is_active = $4 WHERE id = $5`,
-		updatedUser.Username, updatedUser.Email, updatedUser.RoleID, updatedUser.IsActive, id)
-	if err != nil {
+	if err := db.Model(&models.User{}).Where("id = ?", id).Updates(updatedUser).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update user", "error": err.Error()})
 		return
 	}
@@ -161,14 +159,12 @@ func UpdateUser(c *gin.Context, db *sqlx.DB) {
 }
 
 // DeleteUser handles deleting a user by ID
-func DeleteUser(c *gin.Context, db *sqlx.DB) {
+func DeleteUser(c *gin.Context, db *gorm.DB) {
 	id := c.Param("id")
 
-	// Cek apakah user ada di database
 	var user models.User
-	err := db.Get(&user, `SELECT * FROM "user" WHERE id = $1`, id)
-	if err != nil {
-		if err == sql.ErrNoRows {
+	if err := db.First(&user, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "User tidak ditemukan"})
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal mendapatkan data user", "error": err.Error()})
@@ -177,36 +173,24 @@ func DeleteUser(c *gin.Context, db *sqlx.DB) {
 	}
 
 	// Cek apakah user memiliki data employee terkait
-	var employeeCount int
-	err = db.Get(&employeeCount, `SELECT COUNT(*) FROM employee WHERE user_id = $1`, user.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal memeriksa data karyawan", "error": err.Error()})
-		return
-	}
+	var employeeCount int64
+	db.Model(&models.Employee{}).Where("user_id = ?", user.ID).Count(&employeeCount)
 
 	// Cek apakah user memiliki data attendance terkait
-	var attendanceCount int
-	err = db.Get(&attendanceCount, `SELECT COUNT(*) FROM attendance WHERE user_id = $1`, user.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal memeriksa data absensi", "error": err.Error()})
-		return
-	}
+	var attendanceCount int64
+	db.Model(&models.Attendance{}).Where("user_id = ?", user.ID).Count(&attendanceCount)
 
-	// Jika user memiliki data di employee atau attendance, batalkan penghapusan
 	if employeeCount > 0 || attendanceCount > 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "User memiliki data karyawan atau absensi, tidak dapat dihapus"})
 		return
 	}
 
-	// Jika user belum memiliki data employee dan attendance, lanjutkan hanya jika user tidak aktif
 	if user.IsActive {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "User masih aktif, tidak dapat dihapus"})
 		return
 	}
 
-	// Hapus user jika tidak memiliki data terkait dan statusnya tidak aktif
-	_, err = db.Exec(`DELETE FROM "user" WHERE id = $1`, user.ID)
-	if err != nil {
+	if err := db.Delete(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Gagal menghapus user", "error": err.Error()})
 		return
 	}
@@ -217,7 +201,7 @@ func DeleteUser(c *gin.Context, db *sqlx.DB) {
 // formatUsers formats users with role names
 func formatUsers(users []struct {
 	models.User
-	RoleName string `db:"role_name"`
+	RoleName string `gorm:"column:role_name"`
 }) []UserDetail {
 	var formattedUsers []UserDetail
 	for _, user := range users {
@@ -240,10 +224,10 @@ func isValidUsername(username string) bool {
 }
 
 // isUniqueUsername checks if username is unique in the database
-func isUniqueUsername(db *sqlx.DB, username string) bool {
-	var count int
-	err := db.Get(&count, `SELECT COUNT(*) FROM "user" WHERE username = $1`, username)
-	return err == nil && count == 0
+func isUniqueUsername(db *gorm.DB, username string) bool {
+	var count int64
+	db.Model(&models.User{}).Where("username = ?", username).Count(&count)
+	return count == 0
 }
 
 // isValidEmail validates the email format
@@ -253,56 +237,38 @@ func isValidEmail(email string) bool {
 }
 
 // isUniqueEmail checks if email is unique in the database
-func isUniqueEmail(db *sqlx.DB, email string) bool {
-	var count int
-	err := db.Get(&count, `SELECT COUNT(*) FROM "user" WHERE email = $1`, email)
-	return err == nil && count == 0
+func isUniqueEmail(db *gorm.DB, email string) bool {
+	var count int64
+	db.Model(&models.User{}).Where("email = ?", email).Count(&count)
+	return count == 0
 }
 
 // CheckUsername handles checking if the username is already in use
-func CheckUsername(c *gin.Context, db *sqlx.DB) {
-    var request struct {
-        Username string `json:"username"`
-    }
+func CheckUsername(c *gin.Context, db *gorm.DB) {
+	var request struct {
+		Username string `json:"username"`
+	}
 
-    if err := c.ShouldBindJSON(&request); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid input data", "error": err.Error()})
-        return
-    }
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid input"})
+		return
+	}
 
-    var usernameCount int
-    if err := db.Get(&usernameCount, `SELECT COUNT(*) FROM "user" WHERE username = $1`, request.Username); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to check username", "error": err.Error()})
-        return
-    }
-
-    c.JSON(http.StatusOK, gin.H{
-        "status":          "success",
-        "username_exists": usernameCount > 0,
-    })
+	isUnique := isUniqueUsername(db, request.Username)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "username_exists": !isUnique})
 }
 
 // CheckEmail handles checking if the email is already in use
-func CheckEmail(c *gin.Context, db *sqlx.DB) {
-    var request struct {
-        Email string `json:"email"`
-    }
+func CheckEmail(c *gin.Context, db *gorm.DB) {
+	var request struct {
+		Email string `json:"email"`
+	}
 
-    if err := c.ShouldBindJSON(&request); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid input data", "error": err.Error()})
-        return
-    }
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid input"})
+		return
+	}
 
-    var emailCount int
-    if err := db.Get(&emailCount, `SELECT COUNT(*) FROM "user" WHERE email = $1`, request.Email); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to check email", "error": err.Error()})
-        return
-    }
-
-    c.JSON(http.StatusOK, gin.H{
-        "status":       "success",
-        "email_exists": emailCount > 0,
-    })
+	isUnique := isUniqueEmail(db, request.Email)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "email_exists": !isUnique})
 }
-
-

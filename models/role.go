@@ -2,9 +2,9 @@ package models
 
 // Role represents the role of a user in the system
 type Role struct {
-	ID       int    `db:"id" json:"id"`
-	RoleName string `db:"role_name" json:"role_name"` // Pastikan tag db di sini
-	Code     string `db:"code" json:"code"`
+	ID       int   `gorm:"primaryKey;autoIncrement" json:"id"`
+	RoleName string `gorm:"type:varchar(255);not null" json:"role_name"`
+	Code     string `gorm:"type:varchar(100);not null" json:"code"`
 }
 
 // Custom Table Name for Role

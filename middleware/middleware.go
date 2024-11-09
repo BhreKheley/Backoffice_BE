@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 )
 
 // Ambil jwtSecret dari environment variable
@@ -76,7 +76,7 @@ func GenerateToken(userID, roleID int) (string, error) {
 }
 
 // Middleware untuk memeriksa permission berdasarkan kode permission
-func CheckPermission(permissionCode string, db *sqlx.DB) gin.HandlerFunc {
+func CheckPermission(permissionCode string, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleID, exists := c.Get("role_id")
 		if !exists {
@@ -93,8 +93,7 @@ func CheckPermission(permissionCode string, db *sqlx.DB) gin.HandlerFunc {
 		}
 
 		var permission models.Permission
-		err := db.Get(&permission, "SELECT * FROM permission WHERE code = $1", permissionCode)
-		if err != nil {
+		if err := db.Where("code = ?", permissionCode).First(&permission).Error; err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Permission not found"})
 			c.Abort()
 			return
@@ -110,9 +109,9 @@ func CheckPermission(permissionCode string, db *sqlx.DB) gin.HandlerFunc {
 }
 
 // Fungsi untuk cek apakah role memiliki permission tertentu
-func hasPermission(roleID, permissionID int, db *sqlx.DB) bool {
-	var count int
-	err := db.Get(&count, "SELECT COUNT(*) FROM role_permission WHERE role_id = $1 AND permission_id = $2", roleID, permissionID)
+func hasPermission(roleID, permissionID int, db *gorm.DB) bool {
+	var count int64
+	err := db.Table("role_permission").Where("role_id = ? AND permission_id = ?", roleID, permissionID).Count(&count).Error
 	if err != nil {
 		log.Println("Error checking permission:", err)
 		return false

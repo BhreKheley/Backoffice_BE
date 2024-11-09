@@ -4,86 +4,114 @@ import (
 	"absensi-app/middleware"
 	"absensi-app/models"
 	"net/http"
-	// "time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 )
 
+// LoginResponse represents the response structure for login
+type LoginResponse struct {
+	Message   string `json:"message"`
+	APIToken  string `json:"api_token"`
+}
+
+// ErrorResponse represents the structure for error responses
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
 // Login handler untuk otentikasi pengguna
-func Login(c *gin.Context, db *sqlx.DB) {
-	var loginData models.User
+func Login(c *gin.Context, db *gorm.DB) {
+	var loginData struct {
+		Email    string `json:"email" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+
+	// Bind JSON data to loginData struct
 	if err := c.ShouldBindJSON(&loginData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Input tidak valid"})
 		return
 	}
 
 	var user models.User
-	// Query user berdasarkan email
-	err := db.QueryRowx(`SELECT id, username, email, password, role_id, is_active FROM "user" WHERE email = $1`, loginData.Email).
-		StructScan(&user)
-
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+	// Query user berdasarkan email menggunakan GORM
+	if err := db.Where("email = ?", loginData.Email).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Email atau password tidak valid"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Gagal mengakses database"})
 		return
 	}
 
 	// Cek apakah user aktif
 	if !user.IsActive {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User account is inactive"})
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Akun pengguna tidak aktif"})
 		return
 	}
 
-	// Cek password
+	// Cek password (pastikan hashing password digunakan)
 	if user.Password != loginData.Password {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Email atau password tidak valid"})
 		return
 	}
 
 	// Generate JWT token dengan role_id
-	tokenString, err := middleware.GenerateToken(user.ID, user.RoleID) // Gunakan GenerateToken dari middleware
+	tokenString, err := middleware.GenerateToken(user.ID, user.RoleID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Gagal membuat token"})
 		return
 	}
 
 	// Login sukses, return token dan info user (tanpa password)
-	c.JSON(http.StatusOK, gin.H{
-		"message":   "Login successful!",
-		"api_token": tokenString,
+	c.JSON(http.StatusOK, LoginResponse{
+		Message:  "Login berhasil!",
+		APIToken: tokenString,
 	})
 }
 
+// GetUserByTokenResponse represents the response structure for user data retrieved from token
+type GetUserByTokenResponse struct {
+	ID        int   `json:"id"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	RoleID    int   `json:"role_id"`
+	IsActive  bool   `json:"is_active"`
+}
+
 // GetUserByToken handler untuk mendapatkan data user dari token
-func GetUserByToken(c *gin.Context, db *sqlx.DB) {
+func GetUserByToken(c *gin.Context, db *gorm.DB) {
 	// Ambil user_id dari context yang sudah diset di middleware AuthMiddleware
 	userID, exists := c.Get("user_id")
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "User ID tidak ditemukan di konteks"})
 		return
 	}
 
-	// Konversi userID ke integer
+	// Konversi userID ke uint
 	userIDInt, ok := userID.(int)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user ID type"})
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Tipe user ID tidak valid"})
 		return
 	}
 
-	// Query user dari database berdasarkan user ID
+	// Query user dari database berdasarkan user ID menggunakan GORM
 	var user models.User
-	err := db.QueryRowx(`SELECT id, username, email, role_id, is_active FROM "user" WHERE id = $1`, userIDInt).StructScan(&user)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := db.First(&user, userIDInt).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: "Pengguna tidak ditemukan"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Gagal mengakses database"})
 		return
 	}
 
 	// Jika user ditemukan, return data user
-	c.JSON(http.StatusOK, gin.H{
-		"id":        user.ID,
-		"username":  user.Username,
-		"email":     user.Email,
-		"role_id":   user.RoleID,
-		"is_active": user.IsActive,
+	c.JSON(http.StatusOK, GetUserByTokenResponse{
+		ID:       user.ID,
+		Username: user.Username,
+		Email:    user.Email,
+		RoleID:   user.RoleID,
+		IsActive: user.IsActive,
 	})
 }

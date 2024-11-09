@@ -2,9 +2,9 @@ package models
 
 // RolePermission represents the many-to-many relationship between roles and permissions
 type RolePermission struct {
-	ID           int `db:"id" json:"id"` // Ganti gorm menjadi db
-	RoleID       int `db:"role_id" json:"role_id"` // Ganti gorm menjadi db
-	PermissionID int `db:"permission_id" json:"permission_id"` // Ganti gorm menjadi db
+	ID           int `gorm:"primaryKey;autoIncrement" json:"id"`
+	RoleID       int `gorm:"not null" json:"role_id"`
+	PermissionID int `gorm:"not null" json:"permission_id"`
 }
 
 // Custom Table Name for RolePermission
