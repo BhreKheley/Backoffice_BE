@@ -27,8 +27,11 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	// Auth Routes
 	auth := r.Group("auth")
 	{
-		auth.POST("/login", func(c *gin.Context) {
-			handlers.Login(c, db)
+		auth.POST("/login/app", func(c *gin.Context) {
+			handlers.Login(c, db, "APP")
+		})
+		auth.POST("/login/backoffice", func(c *gin.Context) {
+			handlers.Login(c, db, "BACKOFFICE")
 		})
 	}
 
@@ -102,12 +105,22 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	// Role Routes
 	role := protected.Group("/role")
 	{
-		role.Use(middleware.CheckPermission("VIEW_USERS", db))
+		role.Use(middleware.CheckPermission("VIEW_ROLES", db))
 		role.GET("/", func(c *gin.Context) {
 			handlers.GetRoles(c, db)
 		})
+		role.GET("/:id", func(c *gin.Context) {
+			handlers.GetRoleByID(c, db)
+		})
+		role.Use(middleware.CheckPermission("CREATE_ROLE", db))
 		role.POST("/create_role", func(c *gin.Context) {
 			handlers.CreateRole(c, db)
+		})
+		role.PUT("/:id", func(c *gin.Context) {
+			handlers.UpdateRole(c, db)
+		})
+		role.DELETE("/:id", func(c *gin.Context) {
+			handlers.DeleteRole(c, db)
 		})
 	}
 

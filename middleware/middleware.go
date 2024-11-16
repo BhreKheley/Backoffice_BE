@@ -14,17 +14,15 @@ import (
 	"gorm.io/gorm"
 )
 
-// Ambil jwtSecret dari environment variable
 var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 
-// Struct untuk JWT claims yang mencakup role_id dan user_id
 type CustomClaims struct {
-	UserID int `json:"user_id"`
-	RoleID int `json:"role_id"`
+	UserID  int    `json:"user_id"`
+	RoleID  int    `json:"role_id"`
+	Context string `json:"context"`
 	jwt.RegisteredClaims
 }
 
-// Middleware untuk validasi token JWT
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -42,18 +40,19 @@ func AuthMiddleware() gin.HandlerFunc {
 			return jwtSecret, nil
 		})
 
-		if err != nil {
+		if err != nil || !token.Valid {
 			log.Println("JWT Parse Error:", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
 
-		if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
+		if claims, ok := token.Claims.(*CustomClaims); ok {
 			c.Set("user_id", claims.UserID)
 			c.Set("role_id", claims.RoleID)
+			c.Set("context", claims.Context)
 		} else {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 			c.Abort()
 			return
 		}
@@ -61,11 +60,11 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// Fungsi untuk membuat token JWT dengan role_id
-func GenerateToken(userID, roleID int) (string, error) {
+func GenerateToken(userID, roleID int, context string) (string, error) {
 	claims := CustomClaims{
-		UserID: userID,
-		RoleID: roleID,
+		UserID:  userID,
+		RoleID:  roleID,
+		Context: context,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(72 * time.Hour)),
 		},
@@ -74,6 +73,7 @@ func GenerateToken(userID, roleID int) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(jwtSecret)
 }
+
 
 // Middleware untuk memeriksa permission berdasarkan kode permission
 func CheckPermission(permissionCode string, db *gorm.DB) gin.HandlerFunc {

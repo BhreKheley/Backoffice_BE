@@ -5,9 +5,10 @@ import (
 )
 
 type Position struct {
-	ID           int      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID           int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	PositionName string    `gorm:"type:varchar(255);not null" json:"position_name"`
-	DivisionID   int      `gorm:"not null" json:"division_id"`
+	DivisionID   int       `gorm:"not null" json:"division_id"`
+	IsActive     bool      `gorm:"default:true" json:"is_active"`
 	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }

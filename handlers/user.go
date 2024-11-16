@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -141,22 +142,53 @@ func CreateUser(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "User created successfully!"})
 }
 
-// UpdateUser handles updating an existing user by ID
+// UpdateUser updates an existing user by ID
 func UpdateUser(c *gin.Context, db *gorm.DB) {
 	id := c.Param("id")
-	var updatedUser models.User
-	if err := c.ShouldBindJSON(&updatedUser); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid input data", "error": err.Error()})
+	var user models.User
+
+	if err := db.First(&user, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "error",
+				"message": "User not found",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to retrieve user",
+				"error":   err.Error(),
+			})
+		}
 		return
 	}
 
-	if err := db.Model(&models.User{}).Where("id = ?", id).Updates(updatedUser).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update user", "error": err.Error()})
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Invalid input data",
+			"error":   err.Error(),
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "User updated successfully!"})
+	user.UpdatedAt = time.Now()
+
+	if err := db.Save(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to update user",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "User updated successfully",
+	})
 }
+
 
 // DeleteUser handles deleting a user by ID
 func DeleteUser(c *gin.Context, db *gorm.DB) {

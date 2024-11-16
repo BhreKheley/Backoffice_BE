@@ -39,6 +39,137 @@ func CreateRole(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": role})
 }
 
+// UpdateRole - Memperbarui role berdasarkan ID
+func UpdateRole(c *gin.Context, db *gorm.DB) {
+	id := c.Param("id")
+	var role models.Role
+
+	if err := db.First(&role, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "error",
+				"message": "Role not found",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to retrieve role",
+				"error":   err.Error(),
+			})
+		}
+		return
+	}
+
+	if err := c.ShouldBindJSON(&role); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Invalid input data",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if err := db.Save(&role).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to update role",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Role updated successfully",
+		"data":    role,
+	})
+}
+
+// DeleteRole - Menghapus role berdasarkan ID
+func DeleteRole(c *gin.Context, db *gorm.DB) {
+	id := c.Param("id")
+	var role models.Role
+
+	// Check if the role exists
+	if err := db.First(&role, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "error",
+				"message": "Role not found",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to retrieve role",
+				"error":   err.Error(),
+			})
+		}
+		return
+	}
+
+	// Check if the role is active and prevent deletion
+	if role.IsActive {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Cannot delete an active role",
+		})
+		return
+	}
+
+	// Check for related user records
+	var relatedUserCount int64
+	db.Model(&models.User{}).Where("role_id = ?", id).Count(&relatedUserCount)
+	if relatedUserCount > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "Cannot delete role, related users exist",
+		})
+		return
+	}
+
+	// Delete the role if no constraints
+	if err := db.Delete(&role).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": "Failed to delete role",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Role deleted successfully",
+	})
+}
+
+// GetRoleByID - Mendapatkan role berdasarkan ID
+func GetRoleByID(c *gin.Context, db *gorm.DB) {
+	id := c.Param("id")
+	var role models.Role
+
+	if err := db.First(&role, "id = ?", id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "error",
+				"message": "Role not found",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to retrieve role",
+				"error":   err.Error(),
+			})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   role,
+	})
+}
+
 // GetPermissions - Mendapatkan semua permissions
 func GetPermissions(c *gin.Context, db *gorm.DB) {
 	var permissions []models.Permission
