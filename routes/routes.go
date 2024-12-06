@@ -46,8 +46,14 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 		attendance.GET("/", func(c *gin.Context) {
 			handlers.GetAllAttendance(c, db)
 		})
+		attendance.GET("user_id/:user_id", func(c *gin.Context) {
+			handlers.GetAttendanceByUserID(c, db)
+		})
 		attendance.GET("/:id", func(c *gin.Context) {
 			handlers.GetAttendanceByID(c, db)
+		})
+		attendance.GET("/status/:user_id", func(c *gin.Context) {
+			handlers.GetUserAttendanceStatus(c, db)
 		})
 		attendance.Use(middleware.CheckPermission("MANAGE_ATTENDANCE", db))
 		attendance.POST("/checkin", func(c *gin.Context) {
@@ -112,7 +118,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 		role.GET("/:id", func(c *gin.Context) {
 			handlers.GetRoleByID(c, db)
 		})
-		role.Use(middleware.CheckPermission("CREATE_ROLE", db))
+		role.Use(middleware.CheckPermission("MANAGE_ROLE", db))
 		role.POST("/create_role", func(c *gin.Context) {
 			handlers.CreateRole(c, db)
 		})
@@ -138,6 +144,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 		})
 		permission.POST("/assign_permission_to_role", func(c *gin.Context) {
 			handlers.AssignPermissionToRole(c, db)
+		})
+		permission.DELETE("/remove_permission_from_role", func(c *gin.Context) {
+			handlers.RemovePermissionFromRole(c, db)
 		})
 	}
 
@@ -173,6 +182,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 		position.GET("/:id", func(c *gin.Context) {
 			handlers.GetPositionByID(c, db)
 		})
+		position.GET("/division/:division_id", func(c *gin.Context) {
+			handlers.GetPositionsByDivision(c, db)
+		})
 		position.Use(middleware.CheckPermission("MANAGE_POSITIONS", db))
 		position.POST("/create", func(c *gin.Context) {
 			handlers.CreatePosition(c, db)
@@ -185,6 +197,28 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 		})
 	}
 
+	// Status Routes
+	status := protected.Group("/status")
+	{
+		status.Use(middleware.CheckPermission("VIEW_STATUS", db))
+		status.GET("/", func(c *gin.Context) {
+			handlers.GetAllStatus(c, db)
+		})
+		status.GET("/:id", func(c *gin.Context) {
+			handlers.GetStatusByID(c, db)
+		})
+		status.Use(middleware.CheckPermission("MANAGE_STATUS", db))
+		status.POST("/create", func(c *gin.Context) {
+			handlers.CreateStatus(c, db)
+		})
+		status.PUT("/:id", func(c *gin.Context) {
+			handlers.UpdateStatus(c, db)
+		})
+		status.DELETE("/:id", func(c *gin.Context) {
+			handlers.DeleteStatus(c, db)
+		})
+	}
+
 	// Auth route with middleware for getting user by token
 	authProtected := protected.Group("/auth")
 	{
@@ -192,6 +226,11 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 			handlers.GetUserByToken(c, db)
 		})
 	}
+
+	// // Fetch Positions by Division
+	// r.GET("/positions/division/:division_id", func(c *gin.Context) {
+	// 	handlers.GetPositionsByDivision(c, db)
+	// })
 
 	// Route to display all registered routes
 	r.GET("/list-routes", func(c *gin.Context) {

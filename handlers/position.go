@@ -21,6 +21,34 @@ func GetAllPositions(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, positions)
 }
 
+// GetPositionsByDivision retrieves positions by division ID
+func GetPositionsByDivision(c *gin.Context, db *gorm.DB) {
+	// Get division ID from the URL parameter
+	divIDStr := c.Param("division_id")
+	divID, err := strconv.Atoi(divIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid division ID"})
+		return
+	}
+
+	// Retrieve positions that match the division ID
+	var positions []models.Position
+	if err := db.Where("division_id = ?", divID).Find(&positions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// If no positions are found, return a 404
+	if len(positions) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No positions found for this division"})
+		return
+	}
+
+	// Return the found positions
+	c.JSON(http.StatusOK, positions)
+}
+
+
 // GetPositionByID retrieves a position by ID
 func GetPositionByID(c *gin.Context, db *gorm.DB) {
 	id := c.Param("id")
@@ -35,6 +63,8 @@ func GetPositionByID(c *gin.Context, db *gorm.DB) {
 	}
 	c.JSON(http.StatusOK, position)
 }
+
+
 
 // CreatePosition creates a new position
 func CreatePosition(c *gin.Context, db *gorm.DB) {
