@@ -23,7 +23,7 @@ type CustomClaims struct {
 	jwt.RegisteredClaims
 }
 
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -48,6 +48,13 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(*CustomClaims); ok {
+			var user models.User
+			if err := db.Where("id = ? AND current_token = ?", claims.UserID, tokenString).First(&user).Error; err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Token tidak valid atau kadaluwarsa"})
+				c.Abort()
+				return
+			}
+
 			c.Set("user_id", claims.UserID)
 			c.Set("role_id", claims.RoleID)
 			c.Set("context", claims.Context)
@@ -74,6 +81,13 @@ func GenerateToken(userID, roleID int, context string) (string, error) {
 	return token.SignedString(jwtSecret)
 }
 
+// ExtractBearerToken - Menghapus prefix "Bearer " dari Authorization header
+func ExtractBearerToken(authHeader string) string {
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	return authHeader
+}
 
 // Middleware untuk memeriksa permission berdasarkan kode permission
 func CheckPermission(permissionCode string, db *gorm.DB) gin.HandlerFunc {

@@ -8,6 +8,7 @@ import (
 type Employee struct {
 	ID         int       `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID     int       `gorm:"not null" json:"user_id"`
+	Avatar     string    `gorm:"type:text" json:"avatar"`
 	Fullname   string    `gorm:"column:full_name;unique" json:"full_name"`
 	Phone      string    `gorm:"type:varchar(20)" json:"phone"`
 	PositionID int       `gorm:"not null" json:"position_id"`
@@ -17,7 +18,6 @@ type Employee struct {
 	UpdatedAt  time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
-// Custom Table Name for RolePermission
 func (Employee) TableName() string {
 	return "employee"
 }

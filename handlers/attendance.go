@@ -50,7 +50,7 @@ func CheckIn(c *gin.Context, db *gorm.DB) {
 	}
 
 	// Record Clock-In
-	attendance.ClockIn = time.Now()
+	attendance.ClockIn = time.Now().Local()
 	attendance.IsClockedIn = true
 
 	if err := db.Create(&attendance).Error; err != nil {
@@ -189,7 +189,12 @@ func GetAttendanceByUserID(c *gin.Context, db *gorm.DB) {
 	}
 
 	// Ambil semua data kehadiran user dengan pagination
-	var attendances []models.Attendance
+	// var attendances []models.Attendance
+	var attendances []struct {
+		models.Attendance
+		Statusname string `json:"statusname"`
+		Code       string `json:"code"`
+	}
 	var totalRecords int64
 
 	// Hitung total data kehadiran
@@ -204,12 +209,15 @@ func GetAttendanceByUserID(c *gin.Context, db *gorm.DB) {
 		return
 	}
 
-	// Ambil data dengan limit dan offset
-	if err := db.Where("user_id = ?", userID).
+	// Query dengan JOIN untuk mengambil status_name
+	if err := db.Table("attendance AS a").
+		Select("a.*, s.statusname, s.code").
+		Joins("LEFT JOIN status AS s ON a.status_id = s.id").
+		Where("a.user_id = ?", userID).
+		Order("a.clock_in DESC").
 		Limit(limit).
 		Offset(offset).
-		Order("clock_in DESC").
-		Find(&attendances).Error; err != nil {
+		Scan(&attendances).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"status":  "error",
 			"message": "Failed to retrieve attendance records",

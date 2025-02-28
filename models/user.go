@@ -15,7 +15,6 @@ type User struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
-// TableName method untuk men-override nama tabel
 func (User) TableName() string {
 	return "user"
 }

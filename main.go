@@ -23,6 +23,8 @@ func main() {
 		&models.RolePermission{},
 		&models.Status{},
 		&models.User{},
+		&models.Agenda{},
+		&models.AgendaParticipant{},
 	)
 	if err != nil {
 		panic("Failed to migrate database: " + err.Error())

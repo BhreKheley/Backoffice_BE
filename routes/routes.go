@@ -37,7 +37,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 
 	// Routes with auth middleware
 	protected := r.Group("/")
-	protected.Use(middleware.AuthMiddleware())
+	protected.Use(middleware.AuthMiddleware(db))
 
 	// Attendance Routes
 	attendance := protected.Group("/attendance")
@@ -119,7 +119,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 			handlers.GetRoleByID(c, db)
 		})
 		role.Use(middleware.CheckPermission("MANAGE_ROLE", db))
-		role.POST("/create_role", func(c *gin.Context) {
+		role.POST("/", func(c *gin.Context) {
 			handlers.CreateRole(c, db)
 		})
 		role.PUT("/:id", func(c *gin.Context) {
@@ -133,19 +133,21 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	// Permission Routes
 	permission := protected.Group("/permission")
 	{
+		permission.Use(middleware.CheckPermission("VIEW_PERMISSIONS", db))
 		permission.GET("/", func(c *gin.Context) {
 			handlers.GetPermissions(c, db)
 		})
-		permission.GET("/byrole", func(c *gin.Context) {
+		permission.GET("/by-role/:roleID", func(c *gin.Context) {
 			handlers.GetPermissionsByRole(c, db)
 		})
-		permission.POST("/create_permission", func(c *gin.Context) {
+		permission.Use(middleware.CheckPermission("MANAGE_PERMISSIONS", db))
+		permission.POST("/", func(c *gin.Context) {
 			handlers.CreatePermission(c, db)
 		})
-		permission.POST("/assign_permission_to_role", func(c *gin.Context) {
+		permission.POST("/assign", func(c *gin.Context) {
 			handlers.AssignPermissionToRole(c, db)
 		})
-		permission.DELETE("/remove_permission_from_role", func(c *gin.Context) {
+		permission.DELETE("/remove", func(c *gin.Context) {
 			handlers.RemovePermissionFromRole(c, db)
 		})
 	}
@@ -197,6 +199,24 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 		})
 	}
 
+	// Agenda Routes
+	agenda := protected.Group("/agenda")
+	{
+		agenda.Use(middleware.CheckPermission("VIEW_AGENDA", db))
+		agenda.GET("/", handlers.GetAllAgendas(db))
+		agenda.GET("/:id", handlers.GetAgendaDetail(db))
+
+		agenda.Use(middleware.CheckPermission("MANAGE_AGENDA", db))
+		agenda.POST("/", handlers.CreateAgenda(db))
+		agenda.PUT("/:id", handlers.UpdateAgenda(db))
+		agenda.DELETE("/:id", handlers.DeleteAgenda(db))
+		agenda.POST("/:id/add-participant/:user_id", handlers.AddParticipant(db))
+		agenda.DELETE("/:id/remove-participant/:user_id", handlers.RemoveParticipant(db))
+
+		// Routes untuk partisipasi agenda
+		agenda.POST("/:id/join", handlers.JoinAgenda(db))
+	}
+
 	// Status Routes
 	status := protected.Group("/status")
 	{
@@ -226,11 +246,6 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 			handlers.GetUserByToken(c, db)
 		})
 	}
-
-	// // Fetch Positions by Division
-	// r.GET("/positions/division/:division_id", func(c *gin.Context) {
-	// 	handlers.GetPositionsByDivision(c, db)
-	// })
 
 	// Route to display all registered routes
 	r.GET("/list-routes", func(c *gin.Context) {

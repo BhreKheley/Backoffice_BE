@@ -4,7 +4,8 @@ import (
 	"absensi-app/helpers"
 	"absensi-app/models"
 	"fmt"
-	"log"
+
+	// "log"
 	"net/http"
 	"regexp"
 	"time"
@@ -247,7 +248,7 @@ func DeleteUser(c *gin.Context, db *gorm.DB) {
 
 	var user models.User
 	if err := db.First(&user, "id = ?", id).Error; err != nil {
-		handleError(c, err, "Gagal mendapatkan data user")
+		handleError(c, http.StatusInternalServerError, "Gagal mendapatkan data user", err)
 		return
 	}
 
@@ -259,7 +260,7 @@ func DeleteUser(c *gin.Context, db *gorm.DB) {
 	// Cek apakah user memiliki data employee atau attendance terkait
 	var count int64
 	if err := db.Model(&models.Employee{}).Where("user_id = ?", user.ID).Or("user_id = ?", user.ID).Count(&count).Error; err != nil {
-		handleError(c, err, "Gagal memeriksa data terkait user")
+		handleError(c, http.StatusInternalServerError, "Gagal memeriksa data terkait user", err)
 		return
 	}
 
@@ -276,12 +277,13 @@ func DeleteUser(c *gin.Context, db *gorm.DB) {
 
 	// Hapus user jika semua pengecekan berhasil
 	if err := db.Delete(&user).Error; err != nil {
-		handleError(c, err, "Gagal menghapus user")
+		handleError(c, http.StatusInternalServerError, "Gagal menghapus user", err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "User berhasil dihapus"})
 }
+
 // formatUsers formats users with role names
 func formatUsers(users []struct {
 	models.User
@@ -388,9 +390,4 @@ func isUniqueEmailForUpdate(db *gorm.DB, email string, userID int) bool {
 		return err == gorm.ErrRecordNotFound
 	}
 	return false
-}
-
-func handleError(c *gin.Context, err error, message string) {
-	log.Printf("Error: %v", err)
-	c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": message, "error": err.Error()})
 }
